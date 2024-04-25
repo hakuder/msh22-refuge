@@ -54,7 +54,7 @@ library(ggpubr)
 rm(list=ls())
 
 #individual regression models
-setwd("/home/feys/MSH/hannahk_practice1/SF Concept 2023 - hannah")
+
 factors_1 <- read_csv("factors_1.csv")
 
 # read in volume draw down data
