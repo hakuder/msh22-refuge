@@ -16,8 +16,10 @@ This repository is for the paper "
    - Creates factor_plots_comb.pdf
 
 Now we get to the good stuff! We load in the volume and pond feature information (for each pond we have info on vegetation, pH, catchment area, etc) and first create histograms showing the temperature and TRQs of the ponds. We then start modelling. This split into four sections
+
 1. Summer TRQ
 2. Heatwave TRQ
 3. Summer Mean Temp
 4. Heatwave Mean Temp
+   
 Each of these scales the data for that particular set of conditions (either the entire summer or just during the heatwave), checks the data fits a relatively normal distribution, and then the top models are averaged. The TRQ and Mean Temp coefficients are plotted and saved as factor_plots_comb.pdf.
