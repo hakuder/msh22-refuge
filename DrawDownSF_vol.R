@@ -19,7 +19,7 @@ library(corrplot)
 library(broom)
 
 #drawdown rate calculation
-setwd("/home/feys/MSH/hannahk_practice1")
+
 volume_organized <- read.csv("msh2022_pond_volume_not_sn.csv")
 
 # Get day number for each measurement
@@ -152,6 +152,6 @@ modsum_vol <- full_vol %>%
 
 # Write out, then read into 2022_pond_factors_submit.Rmd
 
-write.csv(modsum_vol,file="SF Concept 2023 - hannah/volume_drawdown.csv",row.names = FALSE)
+write.csv(modsum_vol,file="volume_drawdown.csv",row.names = FALSE)
 
 
