@@ -1,6 +1,6 @@
 # msh22-refuge
 
-This repository is for the paper "
+This repository associated with the manuscript "Determinants of freshwater pond thermal refuges during temperature extremes".
 
 ### Files in this directory
 1. DrawDownSF_vol.R
