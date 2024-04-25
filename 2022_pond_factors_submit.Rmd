@@ -1,0 +1,698 @@
+---
+title: "2022_pond_factors"
+author: "HEK"
+date: "2023_12_11"
+---
+
+# MSH 2022 Thermal Refuges
+
+Load Data
+
+Distributions of TRQ and Temperature
+
+Linear Models
+
+1)  Summer TRQ
+
+2)  Heatwave TRQ
+
+3)  Summer Temperature
+
+4)  Heatwave Temperature
+
+4-Panel Figure
+
+## Load Data
+
+```{r, echo = `FALSE`}
+library(readr)
+library(gridExtra)
+library(reshape2)
+library(gridExtra)
+library(purrr)
+library(RColorBrewer)
+library(lubridate)
+library(tidyverse)
+library(tidyr)
+#library(insol)
+library(grid)
+library(forcats)
+library(scales)
+library(moderndive)
+library(ggpubr)
+library(corrplot)
+library(MuMIn)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+#load the car library
+library(car)
+library(ggpubr)
+#library(cowplot)
+
+# Reset global environment
+rm(list=ls())
+
+#individual regression models
+setwd("/home/feys/MSH/hannahk_practice1/SF Concept 2023 - hannah")
+factors_1 <- read_csv("factors_1.csv")
+
+# read in volume draw down data
+volume_DD_data <- read_csv("volume_drawdown.csv")
+# replace columns
+factors_no_DD <-
+  subset(factors_1,
+         select = -c(surface_area, volume, sa_v_ratio, DD_Slope, DD_Yint, perDD))
+factors_new_vol <- cbind(factors_no_DD, volume_DD_data[, 2:6])
+factors_new_vol <- factors_new_vol %>%
+  mutate(sa_v_ratio=surface_area_m/initial_vol)  %>%
+  dplyr::rename(surface_area=surface_area_m, volume=initial_vol, DD_Slope=slope, DD_Yint=yint)
+
+
+factors <- factors_new_vol
+
+#change vegetation from qualitative to quant
+factors <- factors %>% mutate(
+  sub_v = case_when(
+    submerged_vol == "low" ~ 1, 
+    submerged_vol == "moderate" ~2, 
+    submerged_vol == "high" ~3),
+  sub_cov = case_when(
+    submerged_cov == "low" ~ 1, 
+    submerged_cov == "moderate" ~2, 
+    submerged_cov == "high" ~3
+  ))
+
+
+#select quant data
+factorsnum <- factors %>% dplyr::select(pond,T_avg, DO_avg, SPC_avg, pH_avg, FNU_avg, 
+                                 surface_area, volume, sa_v_ratio, altitude, canopy, 
+                                 catchment, draw_r, emergent, 
+                                 sub_cov, sub_v, depth, overhanging, surface,
+                                 meanT_HW_bottom,meanT_HW_surface,meanT_HW,meanT,meanT_bottom,
+                                 meanT_surface,TR,HW_TR, DD_Slope, DD_Yint, perDD, pond)
+#make names shorter
+factorsnum <- factorsnum %>% dplyr::rename(TempSpot=T_avg,DO = DO_avg,
+                                    SPC = SPC_avg, pH= pH_avg,
+                                    FNU = FNU_avg, SA = surface_area,
+                                    V = volume, SAV = sa_v_ratio,
+                                    A = altitude, CC = canopy,
+                                    CA = catchment,
+                                    DR = draw_r,
+                                     EV = emergent,
+                                    SVV = sub_v, SVC = sub_cov, D = depth,
+                                    OV=overhanging, SV = surface,
+                                    H_TRQ=HW_TR, TRQ= TR,
+                                    meanT_HW_bottom=meanT_HW_bottom,meanT_HW_surface=meanT_HW_surface,
+                                    meanT_HW= meanT_HW , meanT=meanT,
+                                    meanT_bottom= meanT_bottom,meanT_surface = meanT_surface, DD_Slope=DD_Slope,
+                                    DD_Yint=DD_Yint, perDD=perDD
+                                    )
+
+
+factorsnum <-factorsnum %>% dplyr::select (-"pond")
+```
+
+## 0) TRQ & Temp Distributions
+
+### 0.1) Mean Pond Temperature & TRQ
+
+```{r}
+
+library(hrbrthemes)
+temp_binwidth <- 1
+trq_binwidth <- temp_binwidth/16
+fonts <- 12
+
+# SUMMER TRQ
+
+summer_TRQ_df <- factorsnum %>% drop_na(TRQ) %>% dplyr::select(TRQ) %>% pivot_longer(1,names_to="Metric",values_to = "Value")  # retrieve mean summer TRQs for each pond
+
+## histogram of mean summer TRQs 
+summer_trq_hist <- ggplot(summer_TRQ_df,aes(x=Value,fill=Metric,color=Metric,))+
+  geom_density(aes(y=after_stat(density)* (nrow(summer_TRQ_df) * trq_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=trq_binwidth)+
+  coord_cartesian(xlim=c(0,1))+
+  scale_fill_manual(values=c("#2C9CB0")) +
+  theme_light()+
+  theme(legend.position = "none",axis.title.y = element_blank(),axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5)
+        #,plot.tag.position = c(0.085, .95)
+        ,plot.tag = element_text(size = fonts)
+        )+
+  labs(tag = "A")
+
+# HEATWAVE TRQ
+heatwave_TRQ_df <- factorsnum %>% drop_na(H_TRQ) %>% dplyr::select(H_TRQ) %>% pivot_longer(1,names_to="Metric",values_to = "Value") # retrieve mean TRQs for each pond during heatwave conditions
+
+## histogram of mean TRQs during heatwave conditions
+heatwave_trq_summary <- heatwave_TRQ_df %>% summarise(max_HW_TRQ = max(Value), min_HW_TRQ = min(Value), median_HW_TRQ = median(Value))
+#plot data
+heatwave_trq_hist <- ggplot(heatwave_TRQ_df,aes(x=Value,fill=Metric,color=Metric))+
+  geom_density(aes(y=after_stat(density)* (nrow(summer_TRQ_df) * trq_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=trq_binwidth)+
+  scale_fill_manual(values=c("#F06C00")) +
+  coord_cartesian(xlim=c(0,1))+
+  theme_light()+
+  xlab("Thermal Refuge Quality")+
+  theme(legend.position = "none",axis.title.y = element_blank(),plot.title = element_text(hjust = 0.4),axis.title.x = element_text(size=fonts)
+        #,plot.tag.position = c(0.085, .95)
+        ,plot.tag = element_text(size = fonts)
+        )+
+  labs(tag = "C")
+
+#heatwave_trq_hist
+
+
+temp_df <- factorsnum %>% drop_na(meanT,meanT_HW) %>% dplyr::select(meanT,meanT_HW) %>% pivot_longer(1:2,names_to="Metric",values_to = "Value") 
+
+
+
+# SUMMER TEMP
+summer_temp_df <- factorsnum %>% drop_na(meanT) %>% dplyr::select(meanT) %>% pivot_longer(1,names_to="Metric",values_to = "Value") # retrieve mean summer temperatures for each pond
+
+summer_temp_summary <- summer_temp_df %>% summarise(max_S_T = max(Value), min_S_T = min(Value), median_S_T = median(Value)) # calculate stats on summer temp
+
+## histogram of mean summer temperatures
+summer_temp_hist <- ggplot(summer_temp_df,aes(x=Value,fill=Metric,color=Metric,))+
+  geom_density(aes(y=after_stat(density)* (nrow(summer_temp_df) * temp_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=temp_binwidth)+
+  scale_fill_manual(values=c("#2C9CB0")) +
+  theme_light()+
+  coord_cartesian(xlim=c(10,26))+
+  theme(legend.position = "none",axis.title.y = element_blank(),axis.title.x = element_blank(),axis.text.y = element_blank(), axis.ticks.y = element_blank(),plot.title = element_text(hjust = 0.5)
+        #,plot.tag.position = c(0.055, .95)
+        ,plot.tag = element_text(size = fonts)
+        )+
+  labs(tag = "B")
+
+#summer_temp_hist
+
+# HEATWAVE TEMP
+heatwave_temp_df <- factorsnum %>% drop_na(meanT_HW) %>% dplyr::select(meanT_HW) %>% pivot_longer(1,names_to="Metric",values_to = "Value") # retrieve mean temperatures for each pond during heatwave conditions
+
+heatwave_temp_summary <- heatwave_temp_df %>% summarise(max_HW_T = max(Value), min_HW_T = min(Value), median_HW_T = median(Value)) # stats for heatwave temperatures
+
+## histogram of mean temperatures during heatwave conditions
+heatwave_temp_hist <- ggplot(heatwave_temp_df,aes(x=Value,fill=Metric,color=Metric,))+
+  geom_density(aes(y=after_stat(density)* (nrow(heatwave_temp_df) * temp_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=temp_binwidth)+
+  scale_fill_manual(values=c("#F06C00")) +
+  theme_light()+
+  coord_cartesian(xlim=c(10,26))+
+  xlab("Mean Pond Temp (°C)")+
+  theme(legend.position = "none",axis.title.y = element_blank(),axis.text.y = element_blank(), axis.ticks.y = element_blank(),plot.title = element_text(hjust = 0.5),axis.title.x = element_text(size=fonts),
+        #plot.tag.position = c(0.055, .95),
+        plot.tag = element_text(size = fonts)
+        )+
+  labs(tag = "D")
+
+# Make grid of all 4 histograms
+
+hist_plots_arrange <- grid.arrange(summer_trq_hist,
+                                   summer_temp_hist,
+                                   heatwave_trq_hist,
+                                   heatwave_temp_hist, 
+                                   left = grid::textGrob("Count", x = .5, hjust = .3, rot = 90,gp = gpar(fontsize = 13)), 
+                                   right = grid::textGrob("Summer                                Heatwave", x = .3, hjust = .51, rot = 270,gp = gpar(fontsize = 13)))
+
+ggsave("hist_plots_arrange3.pdf", plot= hist_plots_arrange,width = 16, height = 12, units = "cm")
+
+```
+
+``` {#summer_trq_hist}
+```
+
+## Factor Plot Code
+
+```{r}
+
+
+
+
+```
+
+### 0.2) Mean Surface/Bottom Temperatures
+
+```{r}
+#plot distribution of mean temp and TRQ
+
+
+
+########## Surface
+
+# Surface Summer
+surface_hist_df <- factorsnum %>% drop_na(meanT_surface) %>% dplyr::select(meanT_surface) %>% pivot_longer(1,names_to="Metric",values_to = "Value") # retrieve entire summer surface temps for each pond
+
+#plot data
+surface_binwidth <- 12.8/15
+# histogram of the entire summer mean pond temperatures
+surface_hist_plot <- ggplot(surface_hist_df,aes(x=Value,fill=Metric,color=Metric,))+
+  geom_density(aes(y=after_stat(density)* (nrow(surface_hist_df) * surface_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=surface_binwidth)+
+  coord_cartesian(xlim=c(13.6,26.4),ylim=c(0,5))+
+  scale_x_continuous(breaks=c(14,18,22,26))+
+  scale_fill_manual(values=c("#EB2E28")) +
+  theme_light()+
+  theme(legend.position = "none",axis.title.y = element_blank(),axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5))+
+  labs(title="Summer Surface",fill="")
+
+#surface_hist_plot
+
+
+# Surface Heatwave
+surface_HW_hist_df <- factorsnum %>% drop_na(meanT_HW_surface) %>% dplyr::select(meanT_HW_surface) %>% pivot_longer(1,names_to="Metric",values_to = "Value") # retrieve entire heatwave surface temps for each pond
+
+# histogram of mean pond temperatures during heatwave conditions
+surface_HW_hist_plot <- ggplot(surface_HW_hist_df,aes(x=Value,fill=Metric,color=Metric,))+
+  geom_density(aes(y=after_stat(density)* (nrow(surface_HW_hist_df) * surface_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=surface_binwidth)+
+  coord_cartesian(xlim=c(13.6,26.4),ylim=c(0,5))+
+  scale_x_continuous(breaks=c(14,18,22,26))+
+  scale_fill_manual(values=c("#EB2E28")) +
+  theme_light()+
+  theme(legend.position = "none",axis.title.y = element_blank(),axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5))+
+  labs(title="Heatwave Surface",fill="")
+
+########## Bottom
+
+# Bottom Summer
+bottom_hist_df <- factorsnum %>% drop_na(meanT_bottom) %>% dplyr::select(meanT_bottom) %>% pivot_longer(1,names_to="Metric",values_to = "Value") # retrieve entire summer bottom temps for each pond
+
+## histogram of mean pond bottom temperatures during entire summer
+benthic_binwidth <- 1
+
+bottom_hist_plot <- ggplot(bottom_hist_df,aes(x=Value,fill=Metric,color=Metric,))+
+  geom_density(aes(y=after_stat(density)* (nrow(bottom_hist_df) * benthic_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=benthic_binwidth)+
+  coord_cartesian(xlim=c(10,25),ylim=c(0,5))+
+  scale_fill_manual(values=c("#5008FC")) +
+  theme_light()+
+  theme(legend.position = "none",axis.title.y = element_blank(),axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5),axis.text.y = element_blank(), axis.ticks.y = element_blank())+
+  labs(title="Summer Benthic",fill="")
+
+#surface_hist_plot
+
+
+# Bottom Heatwave
+bottom_HW_hist_df <- factorsnum %>% drop_na(meanT_HW_bottom) %>% dplyr::select(meanT_HW_bottom) %>% pivot_longer(1,names_to="Metric",values_to = "Value") # retrieve mean bottom temps for each pond during heatwave conditions
+
+## histogram of mean pond bottom temperatures during heatwave conditions
+bottom_HW_hist_plot <- ggplot(bottom_HW_hist_df,aes(x=Value,fill=Metric,color=Metric,))+
+  geom_density(aes(y=after_stat(density)* (nrow(bottom_HW_hist_df) * benthic_binwidth)),alpha=0.4,stat="density",color="#e9ecef")+
+  geom_histogram(aes(y=after_stat(count)),position="identity", color="#e9ecef", alpha=0.7,binwidth=benthic_binwidth)+
+  coord_cartesian(xlim=c(10,25),ylim=c(0,5))+
+  scale_fill_manual(values=c("#5008FC")) +
+  theme_light()+
+  theme(legend.position = "none",axis.title.y = element_blank(),axis.text.y = element_blank(), axis.ticks.y = element_blank(),axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5))+
+  labs(title="Heatwave Benthic",fill="")
+
+# Plot all 4 in one multipanel figure
+yleft <- textGrob("Count", rot = 90, gp = gpar(fontsize = 12))
+si_x_title <- textGrob("Temperature (°C)", gp = gpar(fontsize = 12))
+
+surface_bottom_plots_grid <- grid.arrange(surface_hist_plot,bottom_hist_plot,surface_HW_hist_plot,bottom_HW_hist_plot, left = yleft,bottom=si_x_title)
+ggsave("SI_temp_fig.pdf", plot= surface_bottom_plots_grid,width = 20, height = 15, units = "cm")
+```
+
+For each model (TRQ - Entire Summer, TRQ - Heatwave Conditions, Temperature - Entire Summer, Temperature - Heatwave Conditions)
+
+## 1) Summer TRQ
+
+### Model Selection
+
+```{r, echo = `FALSE`}
+##########################################################################################
+##
+##########################################################################################
+
+# Retrieve Pond Data with TRQ
+modfactors_trqS <- factorsnum %>% drop_na(TRQ)
+# Scale all factors
+modfactors_trqS_scaled<- modfactors_trqS %>% mutate_if(is.numeric, scale)%>% drop_na(TRQ) 
+
+
+# Linear Model for TRQ over the summer
+refmodm<-lm(TRQ ~ perDD + SV + meanT + FNU + CC + CA + V, data=modfactors_trqS_scaled)
+
+
+# Plot VIF values
+vif_trqS<-vif(refmodm)
+vif_trqS_df <- tibble::rownames_to_column(data.frame(vif_trqS), "coefficient")
+ggplot(vif_trqS_df, aes(x=coefficient, y=vif_trqS)) +
+  coord_flip()+
+  geom_bar(stat = "identity")+
+  geom_hline(yintercept = 5.0,linetype="dashed", color = "red")
+
+
+```
+
+### Model Residuals
+
+```{r, echo = `FALSE`}
+###############################################################################################
+shapiro.test(rstandard(refmodm)) #low p-value indicates that the observed data is unlikely under the assumption it was drawn from a normal distribution.
+# Check for normality of residuals
+modfactors_trqS_scaled$residual <- refmodm$residuals
+# check model residuals
+test1<-qplot(refmodm$fitted, refmodm$residuals,
+      geom = "point") +
+  geom_abline(intercept = 0,
+              slope = 0,
+              colour = "red") +
+  labs(title = "Plot of residuals vs fitted values",
+       x = "fitted value",
+       y = "residual")
+# Make a histogram of the residuals
+test2<- qplot(refmodm$residuals,
+              geom = "histogram",
+              bins = 10) +
+  labs(title = "Histogram of residuals",
+       x = "residual")
+test3<-ggplot(data = modfactors_trqS_scaled, aes(sample = residual)) +
+  geom_qq() +
+  geom_qq_line(colour = "red") +
+  labs(title = "Quantile plot of residuals")
+grid.arrange(test1,test2,test3)
+###############################################################################################
+```
+
+### Model Results
+
+```{r, echo = `FALSE`}
+##
+options(na.action = "na.fail") 
+refm <- dredge(refmodm,m.lim = c(1,4)) #note this, will take a few minutes to run
+
+#View(subset(refm, delta <2 ))
+
+
+sum_T1_RefS<-summary(model.avg(refm, subset = delta < 2))
+#plot model output
+df1_RefS<-as.data.frame(sum_T1_RefS$coefmat.full) #selecting full model coefficient averages
+
+CI_RefS <- as.data.frame(confint(sum_T1_RefS, full=T)) # get confidence intervals for full model
+df1_RefS$CI_RefS.min <-CI_RefS$`2.5 %` #pulling out CIs and putting into same df as coefficient estimates
+df1_RefS$CI_RefS.max <-CI_RefS$`97.5 %`# order of coeffients same in both, so no mixups; but should check anyway
+setDT(df1_RefS, keep.rownames = "coefficient") #put rownames into column
+
+names(df1_RefS) <- gsub(" ", "", names(df1_RefS)) # remove spaces from column headers
+```
+
+## 2) Heatwave TRQ
+
+### Model Selection
+
+```{r, echo = `FALSE`}
+
+
+require(MuMIn)
+options(na.action = "na.fail")
+
+#Refuge across heatwave conditions
+modfactors_trqH <- factorsnum %>% drop_na(meanT_HW_surface)
+modfactors_trqH_scaled<- modfactors_trqH %>% mutate_if(is.numeric, scale)%>% drop_na(meanT_HW_surface) 
+
+# Model heatwave TRQ
+refmodmHW<-lm(H_TRQ ~ perDD + SV + meanT + FNU + CC + CA + V, data=modfactors_trqH_scaled)
+
+# Plot VIF values
+vif_trqH<-vif(refmodmHW)
+vif_trqH_df <- tibble::rownames_to_column(data.frame(vif_trqH), "coefficient")
+ggplot(vif_trqH_df, aes(x=coefficient, y=vif_trqH)) +
+  coord_flip()+
+  geom_bar(stat = "identity")+
+  geom_hline(yintercept = 5.0,linetype="dashed", color = "red")
+```
+
+### Model Residuals
+
+```{r, echo = `FALSE`}
+###############################################################################################
+# check model residuals
+shapiro.test(rstandard(refmodmHW)) #low p-value indicates that the observed data is unlikely under the assumption it was drawn from a normal distribution.
+modfactors_trqH_scaled$residual <- refmodmHW$residuals
+test1<-qplot(refmodmHW$fitted, refmodmHW$residuals,
+             geom = "point") +
+  geom_abline(intercept = 0,
+              slope = 0,
+              colour = "red") +
+  labs(title = "Plot of residuals vs fitted values",
+       x = "fitted value",
+       y = "residual")
+# Make a histogram of the residuals
+test2<- qplot(refmodmHW$residuals,
+              geom = "histogram",
+              bins = 10) +
+  labs(title = "Histogram of residuals",
+       x = "residual")
+test3<-ggplot(data = modfactors_trqH_scaled, aes(sample = residual)) +
+  geom_qq() +
+  geom_qq_line(colour = "red") +
+  labs(title = "Quantile plot of residuals")
+grid.arrange(test1,test2,test3)
+###############################################################################################
+```
+
+### Model Results
+
+```{r}
+options(na.action = "na.fail")
+heatmHW <- dredge(refmodmHW) #note this, will take a few minutes to run
+
+top_model<-get.models(heatmHW, subset = 1)[[1]]
+sum_T1_RefHW<-summary(get.models(heatmHW, subset = 1)[[1]])
+
+#plot model output
+df1_RefHW<-as.data.frame(sum_T1_RefHW$coefficients) #selecting full model coefficient averages
+
+CI_RefHW <- as.data.frame(confint(top_model)) # get confidence intervals for full model
+df1_RefHW$CI_RefHW.min <-CI_RefHW$`2.5 %` #pulling out CIs and putting into same df as coefficient estimates
+df1_RefHW$CI_RefHW.max <-CI_RefHW$`97.5 %`# order of coefficients same in both, so no mixups; but should check anyway
+setDT(df1_RefHW, keep.rownames = "coefficient") #put rownames into column
+names(df1_RefHW) <- gsub(" ", "", names(df1_RefHW)) # remove spaces from column headers
+```
+
+## TRQ Plots
+
+```{r}
+
+# Prepare and combine the Summer and Heatwave TRQ model dataframes
+data_RefHW <- df1_RefHW %>% dplyr::rename(CI.min=CI_RefHW.min,CI.max=CI_RefHW.max)
+data_RefHW$Condition <- "Heatwave"
+data_RefHW <- data_RefHW  %>% dplyr::select(coefficient,Estimate,Std.Error,CI.min,CI.max,Condition)
+data_RefS <- df1_RefS %>% dplyr::rename(CI.min=CI_RefS.min,CI.max=CI_RefS.max)
+data_RefS$Condition <- "Summer"
+data_RefS <- data_RefS  %>% dplyr::select(coefficient,Estimate,Std.Error,CI.min,CI.max,Condition)
+comb_trq_test <- rbind(data_RefS,data_RefHW)
+
+
+# Plot Summer and Heatwave TRQ model coefficients!
+refuge_plot <- ggplot(data=comb_trq_test[2:nrow(comb_trq_test),], aes(x=coefficient, y=Estimate, colour=Condition))+ #again, excluding intercept because estimates so much larger
+  geom_hline(yintercept=0, color = "gray",linetype="dashed", lwd=1.5)+ #add dashed line at zero
+  geom_errorbar(aes(ymin=CI.min, ymax=CI.max), width=0, lwd=1.5,alpha=1,position=position_dodge(width=0.7)) +
+  coord_flip(ylim = c(-1, 1)) + # flipping x and y axes
+  geom_point(size=4,position=position_dodge(width=0.7)) +
+  theme_light() + 
+  scale_color_manual(values=c("#F06C00","#2C9CB0"))+
+  scale_x_discrete(limit=c("CA","SV","CC","V","FNU","perDD","meanT"),labels = c( "Catchment","Surface Veg","Canopy Cover","Initial Volume", "Turbidity","Draw Down","Mean Temp")) +
+  theme_light()+  
+  ylab("Thermal Refuge Quality Coefficient") +
+  theme(axis.title.y = element_blank(),plot.title = element_text(hjust = 0.5),axis.title=element_text(size=12),plot.tag = element_text(size = 17))+
+  labs(tag = "A")
+refuge_plot
+```
+
+## 3) Summer Temp
+
+```{r, echo = `FALSE`}
+
+modfactors_tempS <- factorsnum %>% drop_na(meanT)
+modfactors_tempS_scaled<- modfactors_tempS %>% mutate_if(is.numeric, scale)%>% drop_na(meanT) 
+
+# Linear model of mean temperature
+Tmodm<-lm(meanT ~ perDD + SV + FNU  + CC  + CA + V, data=modfactors_tempS_scaled)
+```
+
+### Model Residuals
+
+```{r, echo = `FALSE`}
+###############################################################################################
+shapiro.test(rstandard(Tmodm)) #low p-value indicates that the observed data is unlikely under the assumption it was drawn from a normal distribution.
+modfactors_tempS_scaled$residual <- Tmodm$residuals
+# check model residuals
+test1<-qplot(Tmodm$fitted, Tmodm$residuals,
+             geom = "point") +
+  geom_abline(intercept = 0,
+              slope = 0,
+              colour = "red") +
+  labs(title = "Plot of residuals vs fitted values",
+       x = "fitted value",
+       y = "residual")
+# Make a histogram of the residuals
+test2<- qplot(Tmodm$residuals,
+              geom = "histogram",
+              bins = 10) +
+  labs(title = "Histogram of residuals",
+       x = "residual")
+test3<-ggplot(data = modfactors_tempS_scaled, aes(sample = residual)) +
+  geom_qq() +
+  geom_qq_line(colour = "red") +
+  labs(title = "Quantile plot of residuals")
+grid.arrange(test1,test2,test3)
+###############################################################################################
+```
+
+### Model Results
+
+```{r, echo = `FALSE`}
+##average top models
+
+options(na.action = "na.fail") 
+TmS <- dredge(Tmodm) #note this, will take a few minutes to run
+
+#View(subset(TmS, delta <2 ))
+
+sum_T1_TmS<-summary(model.avg(TmS, subset = delta < 2))
+#plot model output
+df1_TmS<-as.data.frame(sum_T1_TmS$coefmat.full) #selecting full model coefficient averages
+
+CI_TmS <- as.data.frame(confint(sum_T1_TmS, full=T)) # get confidence intervals for full model
+df1_TmS$CI_TmS.min <-CI_TmS$`2.5 %` #pulling out CIs and putting into same df as coefficient estimates
+df1_TmS$CI_TmS.max <-CI_TmS$`97.5 %`# order of coeffients same in both, so no mixups; but should check anyway
+setDT(df1_TmS, keep.rownames = "coefficient") #put rownames into column
+names(df1_TmS) <- gsub(" ", "", names(df1_TmS)) # remove spaces from column headers
+```
+
+## 4) Heatwave Temp
+
+```{r, echo = `FALSE`}
+modfactors_tempH <- factorsnum %>% drop_na(meanT_HW)
+modfactors_tempH_scaled<- modfactors_tempH %>% mutate_if(is.numeric, scale)%>% drop_na(meanT_HW) 
+
+# Linear model of Heatwave mean temperature
+TmodmHW<-lm(meanT_HW ~ perDD + SV + FNU + EV + CC + CA + V, data=modfactors_tempH_scaled)
+```
+
+### Model Residuals
+
+```{r}
+###############################################################################################
+shapiro.test(rstandard(TmodmHW)) #low p-value indicates that the observed data is unlikely under the assumption it was drawn from a normal distribution.
+modfactors_tempH_scaled$residual <- TmodmHW$residuals
+# check model residuals
+test1<-qplot(TmodmHW$fitted, TmodmHW$residuals,
+             geom = "point") +
+  geom_abline(intercept = 0,
+              slope = 0,
+              colour = "red") +
+  labs(title = "Plot of residuals vs fitted values",
+       x = "fitted value",
+       y = "residual")
+# Make a histogram of the residuals
+test2<- qplot(TmodmHW$residuals,
+              geom = "histogram",
+              bins = 10) +
+  labs(title = "Histogram of residuals",
+       x = "residual")
+test3<-ggplot(data = modfactors_tempH_scaled, aes(sample = residual)) +
+  geom_qq() +
+  geom_qq_line(colour = "red") +
+  labs(title = "Quantile plot of residuals")
+grid.arrange(test1,test2,test3)
+###############################################################################################
+```
+
+### Model Results
+
+```{r, echo = `FALSE`}
+##average top models
+
+options(na.action = "na.fail") 
+Tm <- dredge(TmodmHW) #note this, will take a few minutes to run
+
+#View(subset(Tm, delta <2 ))
+sum_T1_Tm<-summary(model.avg(Tm, subset = delta < 2))
+#plot model output
+df1_Tm<-as.data.frame(sum_T1_Tm$coefmat.full) #selecting full model coefficient averages
+
+CI_Tm <- as.data.frame(confint(sum_T1_Tm, full=T)) # get confidence intervals for full model
+df1_Tm$CI_Tm.min <-CI_Tm$`2.5 %` #pulling out CIs and putting into same df as coefficient estimates
+df1_Tm$CI_Tm.max <-CI_Tm$`97.5 %`# order of coeffients same in both, so no mixups; but should check anyway
+setDT(df1_Tm, keep.rownames = "coefficient") #put rownames into column
+names(df1_Tm) <- gsub(" ", "", names(df1_Tm)) # remove spaces from column headers
+```
+
+## Mean Temp Plots
+
+```{r}
+
+# Prepare and combine the mean temperature model dataframes
+data_TmHW <- df1_Tm %>% dplyr::rename(CI.min=CI_Tm.min,CI.max=CI_Tm.max)
+data_TmHW$Condition <- "Heatwave"
+data_TmS <- df1_TmS %>% dplyr::rename(CI.min=CI_TmS.min,CI.max=CI_TmS.max)
+data_TmS$Condition <- "Summer"
+comb_temp_test <- rbind(data_TmS,data_TmHW)
+
+
+# Plot Mean Temp model coefficients!
+temp_plot <- ggplot(data=comb_temp_test[2:nrow(comb_temp_test),], aes(x=coefficient, y=Estimate, colour=Condition))+ #again, excluding intercept because estimates so much larger
+  geom_hline(yintercept=0, color = "gray",linetype="dashed", lwd=1.5)+ #add dashed line at zero
+  geom_errorbar(aes(ymin=CI.min, ymax=CI.max), width=0, lwd=1.5,alpha=1,position=position_dodge(width=0.5)) +
+  coord_flip(ylim = c(-1, 1)) + # flipping x and y axes
+  geom_point(size=4,position=position_dodge(width=0.5)) +
+  theme_light() + 
+  scale_color_manual(values=c("#F06C00","#2C9CB0"))+
+  scale_x_discrete(limit=c("V","SV","CC"),labels = c("Initial Volume", "Surface Veg", "Canopy Cover")) +
+  theme_light()+  
+  ylab("Temperature Coefficient") +
+  theme(axis.title.y = element_blank(),plot.title = element_text(hjust = 0.5),axis.title=element_text(size=12),plot.tag = element_text(size = 17))+
+  labs(tag = "B")
+temp_plot
+```
+
+## Final Figure
+
+```{r}
+
+# Arrange the TRQ and Mean Temperature plots
+factor_plots_comb <- ggarrange(refuge_plot,temp_plot,common.legend = TRUE, legend="right",ncol=1,nrow=2)
+
+# Save Plots
+ggsave("factor_plots_comb.pdf", plot= factor_plots_comb,width = 12, height = 15, units = "cm")
+factor_plots_comb
+```
+
+## Check Correlation Between TRQ and Temp
+
+```{r}
+# HEATWAVE CONDITIONS
+
+TRQ_trq_summary <- modfactors_trqH %>% summarise(max_HW_TRQ = max(H_TRQ), min_HW_TRQ = min(H_TRQ), median_HW_TRQ = median(H_TRQ))
+
+TRQ_temp_summary <- modfactors_trqH %>% summarise(max_HW_temp = max(meanT_HW), min_HW_temp = min(meanT_HW), median_HW_temp = median(meanT_HW))
+
+## Surface
+summary(aov(H_TRQ ~ meanT_HW_surface, data=modfactors_trqH))
+cor(modfactors_trqH$H_TRQ, modfactors_trqH$meanT_HW_surface, method = "pearson")
+
+## Bottom
+summary(aov(H_TRQ ~ meanT_HW_bottom, data=modfactors_trqH))
+cor(modfactors_trqH$H_TRQ, modfactors_trqH$meanT_HW_bottom, method = "pearson")
+
+
+# SUMMER
+
+summer_trq_summary <- modfactors_trqS %>% summarise(max_S_TRQ = max(TRQ), min_S_TRQ = min(TRQ), median_S_TRQ = median(TRQ))
+
+summer_temp_summary <- modfactors_trqS %>% summarise(max_S_temp = max(meanT), min_S_temp = min(meanT), median_S_temp = median(meanT))
+
+## Surface
+summary(aov(TRQ ~ meanT_surface, data=modfactors_trqS))
+cor(modfactors_trqS$TRQ, modfactors_trqS$meanT_surface, method = "pearson")
+
+## Bottom
+summary(aov(TRQ ~ meanT_bottom, data=modfactors_trqS))
+cor(modfactors_trqS$TRQ, modfactors_trqS$meanT_bottom, method = "pearson")
+
+ggplot(modfactors_trqH, aes(x=meanT_HW_bottom,y=H_TRQ)) + geom_point()
+```
